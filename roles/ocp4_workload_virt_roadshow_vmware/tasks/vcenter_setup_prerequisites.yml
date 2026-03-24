@@ -71,9 +71,9 @@
 
   - name: Filter datastores starting with prefix 'workload_share'
     ansible.builtin.set_fact:
-      filtered_datastores: "{{ r_datastores.json | json_query(query) }}"
+      filtered_datastores: "{{ r_datastores.json | json_query(_query) }}"
     vars:
-      query: "[?starts_with(name, 'workload_share')].{name: name, free_space: free_space}"
+      _query: "[?starts_with(name, 'workload_share')].{name: name, free_space: free_space}"
 
   - name: Choose the least used datastore
     ansible.builtin.set_fact:
