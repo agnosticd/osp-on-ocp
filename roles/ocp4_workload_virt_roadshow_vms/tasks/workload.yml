@@ -1,0 +1,32 @@
+---
+- name: Create namespace and VMs
+  kubernetes.core.k8s:
+    state: present
+    definition: "{{ lookup('template', resource) | from_yaml }}"
+  loop:
+  - namespace.yaml.j2
+  - vm_database.yaml.j2
+  - vm_winweb01.yaml.j2
+  - vm_winweb02.yaml.j2
+  loop_control:
+    loop_var: resource
+
+- name: Create services and routes
+  when: ocp4_workload_virt_roadshow_vms_imported_configure_svc_and_route | bool
+  kubernetes.core.k8s:
+    state: present
+    definition: "{{ lookup('template', resource) | from_yaml }}"
+  loop:
+  - service_database.yaml.j2
+  - service_webapp.yaml.j2
+  - route_webapp.yaml.j2
+  loop_control:
+    loop_var: resource
+
+- name: Report VM deployment info
+  agnosticd.core.agnosticd_user_info:
+    msg:
+    - ""
+    - "Imported VMs deployed to namespace: {{ ocp4_workload_virt_roadshow_vms_namespace }}"
+    - "VMs created: database, winweb01, winweb02"
+    - "VMs started: {{ ocp4_workload_virt_roadshow_vms_start_vms | bool }}"
