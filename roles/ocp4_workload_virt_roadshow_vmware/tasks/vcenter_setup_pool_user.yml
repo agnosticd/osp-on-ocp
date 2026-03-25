@@ -1,19 +1,17 @@
 ---
-- name: Get Pool Folder ID
-  environment:
-    VMWARE_HOST: "{{ vcenter_hostname }}"
-    VMWARE_USER: "{{ vcenter_username }}"
-    VMWARE_PASSWORD: "{{ vcenter_password }}"
-    VMWARE_VALIDATE_CERTS: "{{ ocp4_workload_virt_roadshow_vmware_enable_cert_validation }}"
-  vmware.vmware_rest.vcenter_folder_info:
-    type: VIRTUAL_MACHINE
-    names:
-      - "{{ ocp4_workload_virt_roadshow_vmware_vcenter_pool_folder }}"
+- name: Get Pool Folder ID via REST API
+  ansible.builtin.uri:
+    url: "https://{{ vcenter_hostname }}/api/vcenter/folder?type=VIRTUAL_MACHINE&names={{ ocp4_workload_virt_roadshow_vmware_vcenter_pool_folder }}"
+    method: GET
+    headers:
+      vmware-api-session-id: "{{ _ocp4_workload_virt_roadshow_vmware_token }}"
+    validate_certs: "{{ ocp4_workload_virt_roadshow_vmware_enable_cert_validation | bool }}"
+    status_code: 200
   register: r_folder_info
 
 - name: Set Pool folder ID fact
   ansible.builtin.set_fact:
-    _ocp4_workload_virt_roadshow_vmware_vcenter_pool_folder_id: "{{ r_folder_info.value[0].folder }}"
+    _ocp4_workload_virt_roadshow_vmware_vcenter_pool_folder_id: "{{ r_folder_info.json[0].folder }}"
 
 # yamllint disable rule:line-length
 - name: Run playbook on the AD jumphost to create user
@@ -48,23 +46,24 @@
       register: r_vmware_object_role_permission
 
   rescue:
-    - name: Create Pool VMs (fallback)
-      environment:
-        VMWARE_HOST: "{{ vcenter_hostname }}"
-        VMWARE_USER: "{{ vcenter_username }}"
-        VMWARE_PASSWORD: "{{ vcenter_password }}"
-        VMWARE_VALIDATE_CERTS: "{{ ocp4_workload_virt_roadshow_vmware_enable_cert_validation }}"
-      vmware.vmware_rest.vcenter_vmtemplate_libraryitems:
-        name: "{{ vm.name }}-user1"
-        library: '{{ _ocp4_workload_virt_roadshow_vmware_template_library_id }}'
-        template_library_item: "{{ (_ocp4_workload_virt_roadshow_vmware_templates | selectattr('name', 'equalto', vm.template + '-l') | first).id }}"
-        placement:
-          cluster: "{{ _ocp4_workload_virt_roadshow_vmware_vcenter_cluster_id }}"
-          folder: "{{ _ocp4_workload_virt_roadshow_vmware_vcenter_pool_folder_id }}"
-        disk_storage:
-          datastore: "{{ _ocp4_workload_virt_roadshow_vmware_datastore_id }}"
-        state: deploy
-        powered_on: false
+    - name: Create Pool VMs (fallback) via REST API
+      ansible.builtin.uri:
+        url: "https://{{ vcenter_hostname }}/api/vcenter/vm-template/library-items/{{ (_ocp4_workload_virt_roadshow_vmware_templates | selectattr('name', 'equalto', vm.template + '-l') | first).id }}?action=deploy"
+        method: POST
+        headers:
+          Content-Type: "application/json"
+          vmware-api-session-id: "{{ _ocp4_workload_virt_roadshow_vmware_token }}"
+        body_format: json
+        body:
+          name: "{{ vm.name }}-user1"
+          placement:
+            cluster: "{{ _ocp4_workload_virt_roadshow_vmware_vcenter_cluster_id }}"
+            folder: "{{ _ocp4_workload_virt_roadshow_vmware_vcenter_pool_folder_id }}"
+          disk_storage:
+            datastore: "{{ _ocp4_workload_virt_roadshow_vmware_datastore_id }}"
+          powered_on: false
+        validate_certs: "{{ ocp4_workload_virt_roadshow_vmware_enable_cert_validation | bool }}"
+        status_code: 200
       retries: 5
       delay: 10
       until: r_vmc_instance is success
