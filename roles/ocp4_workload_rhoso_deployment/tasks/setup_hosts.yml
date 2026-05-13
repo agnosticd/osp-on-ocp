@@ -1,0 +1,24 @@
+---
+# AgnosticD excludes isolated VMs from direct SSH plays (hosts: all:!isolated)
+# so no SSH proxy is configured for them in the EE inventory.
+# We configure the proxy here using variables AgnosticD already sets:
+#   public_ip_address: bastion external SSH hostname
+#   bastion_ssh_port:   bastion NodePort
+#   ansible_user:       cloud-user
+#
+# ProxyCommand (not ProxyJump) is used so that -o StrictHostKeyChecking=no
+# and -o UserKnownHostsFile=/dev/null apply to BOTH the bastion hop and
+# the final VM connection, preventing interactive host-key prompts in AAP.
+
+- name: Configure isolated VM connections via bastion ProxyCommand
+  ansible.builtin.add_host:
+    name: "{{ item }}"
+    ansible_ssh_common_args: >-
+      -o StrictHostKeyChecking=no
+      -o UserKnownHostsFile=/dev/null
+      -o "ProxyCommand=ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null
+      -W %h:%p -p {{ hostvars[item]['bastion_ssh_port'] }}
+      {{ hostvars[item]['ansible_user'] | default('cloud-user') }}@{{ hostvars[item]['public_ip_address'] }}"
+  loop:
+  - "{{ ocp4_workload_rhoso_deployment_nfs_host }}"
+  - "{{ ocp4_workload_rhoso_deployment_compute_host }}"
